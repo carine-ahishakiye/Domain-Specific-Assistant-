@@ -1,227 +1,176 @@
-# Domain Specific Assistant via LLMs
+# Customer Support Assistant — Fine-Tuned TinyLlama with LoRA
 
-A domain-specific chatbot built by fine-tuning TinyLlama-1.1B on customer support conversations using parameter-efficient LoRA adapters.
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/carine-ahishakiye/Domain-Specific-Assistant-/blob/main/notebook.ipynb)
 
-## Project Overview
+Live Demo: https://carine01-customer-support-assistant.hf.space
 
-This project demonstrates end-to-end LLM fine-tuning for a real-world application: automated customer support. We take a general-purpose 1.1B parameter language model and specialize it to understand and respond to customer queries about orders, refunds, accounts, and shipping.
 
-**Key Results:**
-- ROUGE-1: +39.8% improvement
-- ROUGE-2: +120.5% improvement  
-- ROUGE-L: +62.2% improvement
-- BLEU: +123.9% improvement
-- Perplexity: -66.6% reduction
-- Training time: 107.6 minutes on free T4 GPU
+## Problem Statement
+
+Customer support teams spend a lot of time answering the same types of questions over and over. Questions about order status, refunds, login issues, and shipping come in constantly and follow very predictable patterns. This project looks at whether a small language model can be trained to handle these kinds of queries automatically, in a way that sounds natural and professional.
+
+I took TinyLlama, a 1.1 billion parameter open source model, and fine-tuned it on real customer support conversations. The goal was to make it respond the way a good support agent would, not just generate generic text.
 
 ## Dataset
 
-**Source:** Bitext Customer Support LLM Chatbot Training Dataset  
-**Size:** 26,872 instruction-response pairs  
-**Domain Coverage:** 11 categories including ORDER, REFUND, ACCOUNT, PAYMENT, SHIPPING, DELIVERY
+Source: Bitext Customer Support LLM Chatbot Training Dataset (Hugging Face)
+Total size: 26,872 examples
+What I used: 5,000 examples sampled randomly
+Split: 4,500 for training, 500 for validation
 
-**Sample Categories:**
-- Order management (cancel, track, change)
-- Refund processing and status
-- Account issues (login, password, profile)
-- Payment methods and problems
-- Shipping address updates
-- Product questions and complaints
+The dataset covers 11 categories including orders, refunds, accounts, payments, shipping, and delivery.
 
-**Preprocessing Steps:**
-1. Sampled 5,000 high quality examples
-2. Replaced template placeholders with realistic data
-3. Formatted into instruction-response template
-4. Split 90/10 into training (4,500) and validation (500)
+One issue I had to fix was placeholder tokens. The dataset uses things like {{Order Number}} and {{Name}} as templates. Left as-is, these confuse the model during training. I replaced them all with realistic values before doing anything else:
 
-Example transformation:
+{{Order Number}} becomes ORD-98765
+{{Name}} becomes Alex
+{{Email}} becomes alex@example.com
+{{Refund Amount}} becomes $45.00
+{{Tracking Number}} becomes TRK-77889
+{{Product Name}} becomes wireless headphones
+
+After that, I formatted each example into an instruction-response template:
+
 ```
-Before: "I want to cancel order {{Order Number}}"
-After:  "I want to cancel order ORD-98765"
+Below is a customer support query. Respond helpfully and professionally.
+
+### Customer: I need to cancel my order ORD-98765.
+
+### Support Agent: I understand you would like to cancel...
 ```
 
-## Model Architecture
 
-**Base Model:** TinyLlama-1.1B-Chat-v1.0  
-**Fine-Tuning Method:** LoRA (Low-Rank Adaptation)  
-**Framework:** Hugging Face transformers, peft, trl
+## Model and Fine-Tuning
 
-**LoRA Configuration:**
-- Rank: 16
-- Alpha: 32
-- Target modules: q_proj, v_proj
-- Dropout: 0.05
-- Trainable parameters: 2.25M (0.20% of total)
+Base model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+Method: LoRA (Low-Rank Adaptation) using the peft library
+Training framework: Hugging Face transformers and trl
 
-**Why LoRA?**  
-Instead of updating all 1.1 billion parameters, LoRA injects small trainable matrices into attention layers. This reduces memory usage, speeds up training, and prevents catastrophic forgetting while achieving results comparable to full fine-tuning.
+LoRA keeps most of the model frozen and only trains small adapter matrices inserted into the attention layers. In this case, only 2.25 million parameters were trained out of 1.1 billion total, which is 0.20%. This made it possible to train on a free Google Colab GPU without running out of memory.
 
-## Training Details
+The adapters were applied to the q_proj and v_proj layers with rank 16 and alpha 32.
 
-**Experiment 1 (Selected):**
-- Learning rate: 2e-4
-- Epochs: 3
-- Batch size: 2 (gradient accumulation: 8, effective: 16)
-- Scheduler: Cosine with 26 warmup steps
-- Precision: float32
-- Hardware: Tesla T4 GPU
-- Training time: 107.6 minutes
-- Final training loss: 0.7984
-- Best validation loss: 0.7177
 
-**Experiment 2 (Comparison):**
-- Learning rate: 5e-5
-- Epochs: 1
-- LoRA rank: 8
-- Training time: 37.5 minutes
-- Best validation loss: 0.8019
+## Experiments
 
-Experiment 1 outperformed Experiment 2, demonstrating that the customer support domain required more aggressive adaptation with higher learning rates and increased adapter capacity.
+I ran two experiments with different settings to compare which configuration worked better.
 
-## Evaluation Results
+| Setting | Experiment 1 | Experiment 2 |
+|---|---|---|
+| LoRA Rank | 16 | 8 |
+| LoRA Alpha | 32 | 16 |
+| Learning Rate | 2e-4 | 5e-5 |
+| Epochs | 3 | 1 |
+| Effective Batch Size | 16 | 16 |
+| Trainable Parameters | 2.25M (0.20%) | 1.13M (0.10%) |
+| Training Time | 107.6 mins | 37.5 mins |
+| Final Training Loss | 0.7984 | 0.89 |
+| Best Validation Loss | 0.7177 | 0.8019 |
 
-**Quantitative Metrics (50 validation examples):**
+Experiment 1 performed better. The higher learning rate gave the model more room to adapt to the customer support style, and training for 3 epochs gave it enough time to actually learn the patterns. Experiment 2 was too cautious and did not improve enough in a single epoch.
+
+GPU memory during Experiment 1 on Tesla T4 (15.6 GB total):
+Peak usage was around 8.2 GB, which is about 58% less than what full fine-tuning would have required.
+
+---
+
+## Results
+
+Evaluated on 50 validation examples:
 
 | Metric | Base Model | Fine-Tuned | Improvement |
-|--------|-----------|------------|-------------|
+|---|---|---|---|
 | ROUGE-1 | 0.3407 | 0.4765 | +39.8% |
 | ROUGE-2 | 0.1080 | 0.2382 | +120.5% |
 | ROUGE-L | 0.2093 | 0.3394 | +62.2% |
 | BLEU | 0.0624 | 0.1396 | +123.9% |
 | Perplexity | 6.76 | 2.26 | -66.6% |
 
-All metrics exceed the 10% improvement threshold for production readiness.
+All metrics improved by more than 10%.
 
-**Qualitative Analysis:**
+Here is what the difference looks like on a real query:
 
-Query: "Where is my refund? I returned the item two weeks ago."
+Query: Where is my refund? I returned the item two weeks ago.
 
-Base Model: "Sure, I'd be happy to help you with that. What payment method are you using? ### Customer: I'm using PayPal..."  
-Problem: Breaks format, starts roleplaying multiple turns
+Base model:
+Sure, I would be happy to help you with that. What payment method are you using? ### Customer: I am using PayPal...
 
-Fine-Tuned Model: "I'm sorry to hear that you're experiencing a delay with your refund. I understand how frustrating it can be to wait, especially after already returning the item. Let me look into this for you right away..."  
-Success: Maintains professional tone, acknowledges concern, provides direct assistance
+The base model loses track of the format and starts generating a fake conversation.
 
+Fine-tuned model:
+I am sorry to hear that you are experiencing a delay with your refund. I understand how frustrating it can be to wait, especially after already returning the item. Let me look into this for you right away.
 
+The fine-tuned model stays on track, acknowledges the frustration, and responds the way a real support agent would.
+
+---
 
 ## How to Run
 
-### Option 1: Google Colab
+On Google Colab :
 
-1. Open the notebook in Colab
-2. Select Runtime > Change runtime type > T4 GPU
-3. Run all cells (Runtime > Run all)
-4. Total runtime: approximately 2.5 hours
+1. Click the Colab badge at the top of this file
+2. Go to Runtime then Change runtime type and select T4 GPU
+3. Run all cells from top to bottom
+4. Training takes about 107 minutes, total runtime is around 2.5 hours
 
-### Option 2: Local Environment
+To run locally:
 
-Requirements:
-- Python 3.8+
-- CUDA-capable GPU 
-- 20GB disk space
 ```bash
 git clone https://github.com/carine-ahishakiye/Domain-Specific-Assistant-.git
-
+cd Domain-Specific-Assistant-
 pip install transformers datasets peft trl accelerate evaluate rouge-score gradio torch
-
 jupyter notebook notebook.ipynb
 ```
 
+Requirements: Python 3.8 or higher, a CUDA GPU, and around 20 GB of disk space.
+
+---
+
 ## User Interface
 
-The project includes a Gradio web interface with three tabs:
+The app has three tabs:
 
-1. **Chat Tab:** Single turn interaction with the fine-tuned model
-2. **Base vs Fine-Tuned Tab:** Side-by-side comparison demonstrating improvement
-3. **Model Performance Tab:** Training configuration and metrics summary
+Chat: Type any customer query and get a response from the fine-tuned model.
 
-The UI features:
-- Adjustable response length 
-- Pre-loaded example queries
-- Real time inference
-- Clean, professional design
+Base vs Fine-Tuned: Both models respond to the same query side by side so you can see exactly what changed after training.
 
-## Conversation Examples
+Model Performance: A summary of the training setup and evaluation results.
 
-**Example 1: Order Cancellation**  
-Input: "I need to cancel my order ORD-98765."  
-Output: "I understand you'd like to cancel order ORD-98765. I'd be happy to help you with that. To proceed with the cancellation, could you please verify your account email address? Once confirmed, I'll process the cancellation immediately and you'll receive a confirmation email within 24 hours."
+Try it here: https://carine01-customer-support-assistant.hf.space
 
-**Example 2: Account Access**  
-Input: "I cannot log into my account."  
-Output: "I'm sorry to hear you're having trouble accessing your account. Let me help you resolve this. First, have you tried resetting your password using the 'Forgot Password' link on the login page? If that doesn't work, I can assist you with account recovery. Could you provide the email address associated with your account?"
+---
 
-**Example 3: Refund Status**  
-Input: "I can't track my refund what's going on"  
-Output: "I apologize for the confusion regarding your refund status. I completely understand your concern. Let me look into this for you right away. Typically, refunds are processed within 5-7 business days after we receive the returned item. Could you provide your order number so I can check the exact status of your refund?"
+## Example Conversations
 
-## Technical Implementation
+Order cancellation:
 
-**Key Components:**
-- **Data Pipeline:** Hugging Face datasets for loading and preprocessing
-- **Model Training:** TRL's SFTTrainer for supervised fine-tuning
-- **Adapter Method:** PEFT library for LoRA implementation
-- **Evaluation:** evaluate library for ROUGE and BLEU metrics
-- **Interface:** Gradio for interactive web UI
+Customer: I need to cancel my order ORD-98765.
+Agent: I understand you would like to cancel order ORD-98765. I would be happy to help. Could you please verify your account email? Once confirmed I will process the cancellation and you will receive a confirmation within 24 hours.
 
-**Training Optimizations:**
-- Gradient accumulation to simulate larger batch sizes
-- Cosine learning rate schedule with warmup
-- Early stopping based on validation loss
-- Checkpoint saving for best model selection
+Account access:
 
-**Challenges Solved:**
-1. Float16 training caused gradient underflow → switched to float32
-2. Template placeholders confused the model → systematic replacement
-3. Memory constraints on free tier GPU → LoRA reduced trainable parameters by 99.8%
+Customer: I cannot log into my account.
+Agent: I am sorry to hear you are having trouble. Have you tried resetting your password using the Forgot Password link? If that does not work I can help with account recovery. Just provide the email address associated with your account.
 
-## Performance Analysis
+Refund status:
 
-**Training Efficiency:**
-- Only 0.20% of parameters trained (2.25M out of 1.1B)
-- Model size: 9MB adapter weights vs 4.4GB full model
-- Training cost: 107 minutes vs estimated 10+ hours for full fine-tuning
-- Memory footprint: 6.4GB vs 15+ GB for full fine-tuning
+Customer: I cannot track my refund, what is going on?
+Agent: I apologize for the confusion. Refunds are typically processed within 5 to 7 business days after we receive the return. Could you share your order number so I can check the exact status for you?
 
-**Generalization:**
-The model successfully learned to:
-- Maintain professional customer support tone
-- Stay in character as a support agent
-- Acknowledge customer frustration appropriately
-- Provide structured, actionable responses
-- Handle diverse query types 
+---
 
-## Limitations and Future Work
+## Libraries Used
 
-**Current Limitations:**
-- Single-turn conversations only 
-- Limited to training data distribution 
-- No real time knowledge or database access
-- GPU disconnections
+transformers: model loading and text generation
+peft: LoRA implementation
+trl: SFTTrainer for supervised fine-tuning
+evaluate: ROUGE and BLEU metric calculation
+gradio: web interface
+Google Colab: free T4 GPU for training
+Hugging Face Hub: model hosting and permanent deployment
 
-**Potential Improvements:**
-- Multi turn conversation support with context tracking
-- RAG integration for dynamic knowledge retrieval
-- Separate adapters for different product categories
-- Multilingual support through translation or multilingual base models
-- Production deployment with API endpoints and monitoring
-
-## Reproducibility
-
-All experiments use fixed random seeds:
-- Data sampling: seed=42
-- Validation split: seed=99
-- Model training: automatic seeding via transformers
-
-Hardware details:
-- GPU: Tesla T4 (15.6GB VRAM)
-- CPU: Intel Xeon (Colab free tier)
-- RAM: 12GB system memory
+---
 
 ## Acknowledgments
 
-**Dataset:** Bitext for the Customer Support LLM Chatbot Training Dataset  
-**Base Model:** TinyLlama team for TinyLlama-1.1B-Chat-v1.0  
-**Libraries:** Hugging Face (transformers, datasets, peft, trl, evaluate), Gradio  
-**Infrastructure:** Google Colab for free GPU access
-
+Dataset provided by Bitext. Base model by the TinyLlama team. Training and deployment libraries by Hugging Face.

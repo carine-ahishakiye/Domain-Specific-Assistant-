@@ -1,6 +1,6 @@
 # Customer Support Assistant — Fine-Tuned TinyLlama with LoRA
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/carine-ahishakiye/Domain-Specific-Assistant-/blob/main/notebook.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1lcKJW8n4BocNdWZuyzL1BXrOGoqV22RY#scrollTo=A70jxDdUB5-Q)
 
 Live Demo: https://carine01-customer-support-assistant.hf.space
 

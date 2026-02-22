@@ -2,7 +2,7 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1lcKJW8n4BocNdWZuyzL1BXrOGoqV22RY#scrollTo=fyMPrZTfBkq9)
 
-Live Demo: https://carine01-customer-support-assistant.hf.space
+Live Demo: https://youtu.be/FNZ4E2iAHlw?si=4eucBXTYfEyOFCDp
 
 
 ## Problem Statement
